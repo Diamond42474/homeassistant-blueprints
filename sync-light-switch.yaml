@@ -1,0 +1,88 @@
+blueprint:
+  name: Sync Light or Switch with Target (Bi-directional + Dimming)
+  description: >
+    Keeps a switch or light (controller) in sync with another light or switch (target),
+    including brightness if both are lights. Toggling or changing brightness on either will sync the other.
+    Prevents feedback loops using state and brightness checks.
+
+  domain: automation
+  input:
+    controller:
+      name: Controller
+      description: A switch or light that toggles the target (e.g. wall switch)
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+    target:
+      name: Target
+      description: A light, switch, or group that should stay in sync with the controller
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+
+trigger:
+  - platform: state
+    entity_id: !input controller
+  - platform: state
+    entity_id: !input target
+
+variables:
+  controller_entity: !input controller
+  target_entity: !input target
+  controller_state: "{{ states(controller_entity) }}"
+  target_state: "{{ states(target_entity) }}"
+  controller_brightness: "{{ state_attr(controller_entity, 'brightness') | int(0) }}"
+  target_brightness: "{{ state_attr(target_entity, 'brightness') | int(0) }}"
+
+mode: queued
+
+action:
+  - choose:
+      # Controller changed
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.entity_id == controller_entity }}"
+        sequence:
+          - choose:
+              # Brightness or state differs
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ controller_state != target_state
+                         or controller_brightness != target_brightness }}
+                sequence:
+                  - service: homeassistant.turn_on
+                    data:
+                      entity_id: !input target
+                      brightness: "{{ controller_brightness if controller_state == 'on' else omit }}"
+                  - condition: template
+                    value_template: "{{ controller_state == 'off' }}"
+                  - service: homeassistant.turn_off
+                    data:
+                      entity_id: !input target
+
+      # Target changed
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.entity_id == target_entity }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ controller_state != target_state
+                         or controller_brightness != target_brightness }}
+                sequence:
+                  - service: homeassistant.turn_on
+                    data:
+                      entity_id: !input controller
+                      brightness: "{{ target_brightness if target_state == 'on' else omit }}"
+                  - condition: template
+                    value_template: "{{ target_state == 'off' }}"
+                  - service: homeassistant.turn_off
+                    data:
+                      entity_id: !input controller
