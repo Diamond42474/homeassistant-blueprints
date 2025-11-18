@@ -1,0 +1,77 @@
+blueprint:
+  name: Randomize Group Colors
+  description: >
+    Randomizes each light within a selected light group to a randomly chosen
+    color from your predefined color pool. Each light gets its own random pick.
+  domain: automation
+  input:
+    target_group:
+      name: Light Group
+      description: Select the light group whose lights will be randomized.
+      selector:
+        entity:
+          domain: light
+    color_pool:
+      name: Color Pool
+      description: >
+        Enter a list of colors. You can use color names (red, blue, white)
+        or RGB lists like [255, 0, 0]. Example:
+        red, white, blue
+      default: "red, white, blue"
+      selector:
+        text:
+    interval:
+      name: Randomization Interval (seconds)
+      description: >
+        How often to apply new random colors. Leave at 0 for manual-only mode
+        (run on demand from the automation UI).
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: seconds
+          mode: slider
+
+mode: restart
+
+trigger:
+  - platform: time_pattern
+    seconds: >
+      {% if interval | int > 0 %}
+        /{{ interval | int }}
+      {% else %}
+        999999  # practically disables time trigger
+      {% endif %}
+
+variables:
+  color_pool_list: >
+    {{
+      color_pool.split(',')
+      | map('trim')
+      | list
+    }}
+  target_lights: "{{ expand(target_group) }}"
+
+action:
+  - repeat:
+      for_each: "{{ target_lights }}"
+      sequence:
+        - variables:
+            chosen_color: "{{ color_pool_list | random }}"
+        - choose:
+            - conditions: "{{ chosen_color is string }}"
+              sequence:
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ repeat.item.entity_id }}"
+                  data:
+                    color_name: "{{ chosen_color }}"
+                    brightness: 255
+          default:
+            - service: light.turn_on
+              target:
+                entity_id: "{{ repeat.item.entity_id }}"
+              data:
+                rgb_color: "{{ chosen_color }}"
+                brightness: 255
