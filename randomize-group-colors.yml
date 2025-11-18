@@ -1,76 +1,60 @@
 blueprint:
-  name: Randomize Group Colors (fixed trigger)
+  name: Randomize Group Colors (manual / callable)
   description: >
     Randomizes each light within a selected light group to a randomly chosen
     color from your predefined color pool. Each light gets its own random pick.
-    This version avoids templating inside the trigger by using a 1s time_pattern
-    and gating execution in the action (so manual runs still work).
+    This blueprint is intentionally triggerless — run it manually or call it
+    from another automation (example scheduler provided below).
   domain: automation
+
   input:
     target_group:
-      name: Light Group
+      name: Light group
+      description: Select the light group whose lights will be randomized.
       selector:
         entity:
           domain: light
     color_pool:
-      name: Color Pool
+      name: Color pool
       description: >
-        Enter a comma-separated list of colors. Use color names (red, blue, white)
-        or RGB lists like [255, 0, 0]. Example: red, white, [0,0,255]
+        Comma-separated list of colors. Use color names (red, blue, white)
+        or JSON-style RGB lists like [255, 0, 0]. Example: red, white, [0,0,255]
       default: "red, white, blue"
       selector:
         text:
-    interval:
-      name: Randomization Interval (seconds)
-      description: >
-        How often to apply new random colors. Leave at 0 for manual-only mode
-        (run on demand from the automation UI).
-      default: 0
+    only_if_on:
+      name: Only randomize lights that are currently ON
+      description: If enabled, lights that are off will be skipped.
+      default: true
       selector:
-        number:
-          min: 0
-          max: 86400
-          unit_of_measurement: seconds
+        boolean: {}
+
+# no trigger here — the automation created from this blueprint is meant to be run manually
+variables:
+  color_pool_list: "{{ color_pool.split(',') | map('trim') | list }}"
+  target_lights: "{{ expand(target_group) }}"
 
 mode: restart
 
-# This fires every second. Execution is gated in the action below so:
-# - If interval = 0, only manual runs (from UI) will proceed.
-# - If interval > 0, execution only proceeds when the current timestamp
-#   is divisible by the interval (so it runs roughly every N seconds).
-trigger:
-  - platform: time_pattern
-    seconds: "/1"
-
-variables:
-  # normalize color pool into a list of trimmed strings
-  color_pool_list: >
-    {{ color_pool.split(',') | map('trim') | list }}
-  target_lights: "{{ expand(target_group) }}"
-  int_interval: "{{ interval | int }}"
-
 action:
-  # gate: decide whether this execution should proceed
-  - condition: template
-    # If interval == 0, only allow non-time_pattern triggers (manual runs).
-    # If interval > 0, only allow when as_timestamp(now()) % interval == 0.
-    value: >
-      {% set intv = int_interval | int %}
-      {% if intv == 0 %}
-        {{ trigger is not defined or (trigger is defined and trigger.platform != 'time_pattern') }}
-      {% else %}
-        {{ (as_timestamp(now()) | int) % intv == 0 }}
-      {% endif %}
-
-  # If we passed the gate, randomize each light
+  - variables:
+      pool: "{{ color_pool_list }}"
+      only_on_flag: "{{ only_if_on | bool }}"
   - repeat:
       for_each: "{{ target_lights }}"
       sequence:
+        - condition: template
+          # Skip lights that are off when only_if_on is true
+          value: >
+            {% if only_on_flag %}
+              {{ repeat.item.state == 'on' }}
+            {% else %}
+              true
+            {% endif %}
         - variables:
-            chosen_color: "{{ color_pool_list | random }}"
+            chosen_color: "{{ pool | random }}"
         - choose:
             - conditions:
-                # detect an RGB list string like "[255, 0, 0]"
                 - "{{ chosen_color.startswith('[') }}"
               sequence:
                 - service: light.turn_on
@@ -79,10 +63,10 @@ action:
                   data:
                     rgb_color: "{{ chosen_color | from_json }}"
                     brightness: 255
-          default:
-            - service: light.turn_on
-              target:
-                entity_id: "{{ repeat.item.entity_id }}"
-              data:
-                color_name: "{{ chosen_color }}"
-                brightness: 255
+            - default:
+                - service: light.turn_on
+                  target:
+                    entity_id: "{{ repeat.item.entity_id }}"
+                  data:
+                    color_name: "{{ chosen_color }}"
+                    brightness: 255
