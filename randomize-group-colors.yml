@@ -1,22 +1,22 @@
 blueprint:
-  name: Randomize Group Colors
+  name: Randomize Group Colors (fixed trigger)
   description: >
     Randomizes each light within a selected light group to a randomly chosen
     color from your predefined color pool. Each light gets its own random pick.
+    This version avoids templating inside the trigger by using a 1s time_pattern
+    and gating execution in the action (so manual runs still work).
   domain: automation
   input:
     target_group:
       name: Light Group
-      description: Select the light group whose lights will be randomized.
       selector:
         entity:
           domain: light
     color_pool:
       name: Color Pool
       description: >
-        Enter a list of colors. You can use color names (red, blue, white)
-        or RGB lists like [255, 0, 0]. Example:
-        red, white, blue
+        Enter a comma-separated list of colors. Use color names (red, blue, white)
+        or RGB lists like [255, 0, 0]. Example: red, white, [0,0,255]
       default: "red, white, blue"
       selector:
         text:
@@ -29,49 +29,60 @@ blueprint:
       selector:
         number:
           min: 0
-          max: 3600
+          max: 86400
           unit_of_measurement: seconds
-          mode: slider
 
 mode: restart
 
+# This fires every second. Execution is gated in the action below so:
+# - If interval = 0, only manual runs (from UI) will proceed.
+# - If interval > 0, execution only proceeds when the current timestamp
+#   is divisible by the interval (so it runs roughly every N seconds).
 trigger:
   - platform: time_pattern
-    seconds: >
-      {% if interval | int > 0 %}
-        /{{ interval | int }}
-      {% else %}
-        999999  # practically disables time trigger
-      {% endif %}
+    seconds: "/1"
 
 variables:
+  # normalize color pool into a list of trimmed strings
   color_pool_list: >
-    {{
-      color_pool.split(',')
-      | map('trim')
-      | list
-    }}
+    {{ color_pool.split(',') | map('trim') | list }}
   target_lights: "{{ expand(target_group) }}"
+  int_interval: "{{ interval | int }}"
 
 action:
+  # gate: decide whether this execution should proceed
+  - condition: template
+    # If interval == 0, only allow non-time_pattern triggers (manual runs).
+    # If interval > 0, only allow when as_timestamp(now()) % interval == 0.
+    value: >
+      {% set intv = int_interval | int %}
+      {% if intv == 0 %}
+        {{ trigger is not defined or (trigger is defined and trigger.platform != 'time_pattern') }}
+      {% else %}
+        {{ (as_timestamp(now()) | int) % intv == 0 }}
+      {% endif %}
+
+  # If we passed the gate, randomize each light
   - repeat:
       for_each: "{{ target_lights }}"
       sequence:
         - variables:
             chosen_color: "{{ color_pool_list | random }}"
         - choose:
-            - conditions: "{{ chosen_color is string }}"
+            - conditions:
+                # detect an RGB list string like "[255, 0, 0]"
+                - "{{ chosen_color.startswith('[') }}"
               sequence:
                 - service: light.turn_on
                   target:
                     entity_id: "{{ repeat.item.entity_id }}"
                   data:
-                    color_name: "{{ chosen_color }}"
+                    rgb_color: "{{ chosen_color | from_json }}"
                     brightness: 255
           default:
             - service: light.turn_on
               target:
                 entity_id: "{{ repeat.item.entity_id }}"
               data:
-                rgb_color: "{{ chosen_color }}"
+                color_name: "{{ chosen_color }}"
                 brightness: 255
