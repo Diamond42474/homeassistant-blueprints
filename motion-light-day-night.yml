@@ -1,9 +1,8 @@
 blueprint:
-  name: Motion-Activated Light (Day/Night Settings)
+  name: Motion Light with Day/Night Settings
   description: >
-    Turn on lights when motion is detected, using different brightness/color/effect
-    during daytime vs between sunset and sunrise. Turns lights off after motion stops
-    and a configurable delay.
+    Turn lights on with motion. Use different light settings for daytime
+    vs sunset-to-sunrise. Turn off after motion stops and a delay.
   domain: automation
 
   input:
@@ -14,28 +13,27 @@ blueprint:
           domain: binary_sensor
           device_class: motion
 
-    target_light:
+    light_target:
       name: Light or Area
-      description: Select either a light entity or an area
       selector:
         target:
-          entity:
-            domain: light
-          area: {}
 
-    day_settings:
+    day_light_data:
       name: Day Light Settings
+      description: >
+        Light service data (brightness_pct, color_temp, rgb_color, effect, etc)
       selector:
-        light:
+        object:
 
-    night_settings:
+    night_light_data:
       name: Night Light Settings
+      description: >
+        Light service data (brightness_pct, color_temp, rgb_color, effect, etc)
       selector:
-        light:
+        object:
 
     off_delay:
-      name: Delay Before Turning Off
-      description: Time to wait after motion stops
+      name: Delay After Motion Stops
       default: "00:05:00"
       selector:
         duration:
@@ -71,12 +69,12 @@ action:
             before_offset: !input sunrise_offset
         sequence:
           - service: light.turn_on
-            target: !input target_light
-            data: !input night_settings
+            target: !input light_target
+            data: !input night_light_data
     default:
       - service: light.turn_on
-        target: !input target_light
-        data: !input day_settings
+        target: !input light_target
+        data: !input day_light_data
 
   - wait_for_trigger:
       - platform: state
@@ -87,4 +85,4 @@ action:
   - delay: !input off_delay
 
   - service: light.turn_off
-    target: !input target_light
+    target: !input light_target
