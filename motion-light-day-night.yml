@@ -1,8 +1,9 @@
 blueprint:
-  name: Motion Light with Day/Night Settings
+  name: Motion Light – Day/Night Settings
   description: >
-    Turn lights on with motion. Use different light settings for daytime
-    vs sunset-to-sunrise. Turn off after motion stops and a delay.
+    Turn lights on when motion is detected.
+    Uses different light settings during daytime vs night (sunset to sunrise),
+    then turns lights off after motion stops and a delay.
   domain: automation
 
   input:
@@ -20,20 +21,18 @@ blueprint:
 
     day_light_data:
       name: Day Light Settings
-      description: >
-        Light service data (brightness_pct, color_temp, rgb_color, effect, etc)
+      description: Light.turn_on service data for daytime
       selector:
         object:
 
     night_light_data:
       name: Night Light Settings
-      description: >
-        Light service data (brightness_pct, color_temp, rgb_color, effect, etc)
+      description: Light.turn_on service data for nighttime
       selector:
         object:
 
     off_delay:
-      name: Delay After Motion Stops
+      name: Off Delay
       default: "00:05:00"
       selector:
         duration:
