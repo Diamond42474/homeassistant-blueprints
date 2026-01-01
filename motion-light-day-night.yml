@@ -1,9 +1,6 @@
 blueprint:
-  name: Motion Light – Day/Night Settings
-  description: >
-    Turn lights on when motion is detected.
-    Uses different light settings during daytime vs night (sunset to sunrise),
-    then turns lights off after motion stops and a delay.
+  name: Motion Light – Day/Night (UI Controls)
+  description: Motion-activated lights with separate day/night brightness.
   domain: automation
 
   input:
@@ -19,17 +16,23 @@ blueprint:
       selector:
         target:
 
-    day_light_data:
-      name: Day Light Settings
-      description: Light.turn_on service data for daytime
+    day_brightness:
+      name: Day Brightness (%)
+      default: 100
       selector:
-        object:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
 
-    night_light_data:
-      name: Night Light Settings
-      description: Light.turn_on service data for nighttime
+    night_brightness:
+      name: Night Brightness (%)
+      default: 25
       selector:
-        object:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
 
     off_delay:
       name: Off Delay
@@ -37,20 +40,7 @@ blueprint:
       selector:
         duration:
 
-    sunset_offset:
-      name: Sunset Offset
-      default: "00:05:00"
-      selector:
-        duration:
-
-    sunrise_offset:
-      name: Sunrise Offset
-      default: "00:30:00"
-      selector:
-        duration:
-
 mode: restart
-max_exceeded: silent
 
 trigger:
   - platform: state
@@ -63,17 +53,17 @@ action:
       - conditions:
           - condition: sun
             after: sunset
-            after_offset: !input sunset_offset
             before: sunrise
-            before_offset: !input sunrise_offset
         sequence:
           - service: light.turn_on
             target: !input light_target
-            data: !input night_light_data
+            data:
+              brightness_pct: !input night_brightness
     default:
       - service: light.turn_on
         target: !input light_target
-        data: !input day_light_data
+        data:
+          brightness_pct: !input day_brightness
 
   - wait_for_trigger:
       - platform: state
