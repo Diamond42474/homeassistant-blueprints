@@ -1,5 +1,5 @@
 blueprint:
-  name: Motion Light – Day/Night (UI Controls)
+  name: Motion Light – Day/Night
   description: Motion-activated lights with separate day/night brightness.
   domain: automation
 
