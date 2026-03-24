@@ -1,0 +1,280 @@
+blueprint:
+  name: Philips Hue Tap Dial Switch – Device Event Controller
+  description: >
+    Control a Hue Tap Dial Switch by selecting the switch device directly.
+    This blueprint listens for `hue_event` / `zha_event` device events,
+    then maps button and dial actions to your custom sequences.
+
+    Because integrations emit slightly different action values, each event value
+    is configurable. Start with defaults, then adjust to match your event payloads.
+  domain: automation
+
+  input:
+    tap_dial_device:
+      name: Tap Dial device
+      description: Select your Philips Hue Tap Dial Switch device.
+      selector:
+        device: {}
+
+    # Action values to match (customize for your integration)
+    button_1_single_value:
+      name: Button 1 single press value
+      default: short_release_1
+      selector:
+        text: {}
+    button_1_long_value:
+      name: Button 1 long press value
+      default: long_release_1
+      selector:
+        text: {}
+
+    button_2_single_value:
+      name: Button 2 single press value
+      default: short_release_2
+      selector:
+        text: {}
+    button_2_long_value:
+      name: Button 2 long press value
+      default: long_release_2
+      selector:
+        text: {}
+
+    button_3_single_value:
+      name: Button 3 single press value
+      default: short_release_3
+      selector:
+        text: {}
+    button_3_long_value:
+      name: Button 3 long press value
+      default: long_release_3
+      selector:
+        text: {}
+
+    button_4_single_value:
+      name: Button 4 single press value
+      default: short_release_4
+      selector:
+        text: {}
+    button_4_long_value:
+      name: Button 4 long press value
+      default: long_release_4
+      selector:
+        text: {}
+
+    dial_clockwise_value:
+      name: Dial clockwise value
+      default: rotate_right
+      selector:
+        text: {}
+    dial_counterclockwise_value:
+      name: Dial counterclockwise value
+      default: rotate_left
+      selector:
+        text: {}
+
+    # Optional built-in dimming for dial rotation
+    enable_builtin_dimming:
+      name: Enable built-in dimming on dial rotate
+      description: >
+        If enabled, clockwise rotation increases brightness and counterclockwise
+        decreases brightness for the target below.
+      default: false
+      selector:
+        boolean: {}
+
+    dim_target:
+      name: Dimming target (optional)
+      description: Light or area to dim when built-in dimming is enabled.
+      default: {}
+      selector:
+        target:
+          entity:
+            domain: light
+
+    dim_step_pct:
+      name: Dimming step (%)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          step: 1
+          unit_of_measurement: "%"
+
+    # User-defined action sequences
+    on_button_1_single:
+      name: Button 1 single press action
+      default: []
+      selector:
+        action: {}
+    on_button_1_long:
+      name: Button 1 long press action
+      default: []
+      selector:
+        action: {}
+
+    on_button_2_single:
+      name: Button 2 single press action
+      default: []
+      selector:
+        action: {}
+    on_button_2_long:
+      name: Button 2 long press action
+      default: []
+      selector:
+        action: {}
+
+    on_button_3_single:
+      name: Button 3 single press action
+      default: []
+      selector:
+        action: {}
+    on_button_3_long:
+      name: Button 3 long press action
+      default: []
+      selector:
+        action: {}
+
+    on_button_4_single:
+      name: Button 4 single press action
+      default: []
+      selector:
+        action: {}
+    on_button_4_long:
+      name: Button 4 long press action
+      default: []
+      selector:
+        action: {}
+
+    on_dial_clockwise:
+      name: Dial clockwise action
+      description: Optional custom actions in addition to built-in dimming.
+      default: []
+      selector:
+        action: {}
+    on_dial_counterclockwise:
+      name: Dial counterclockwise action
+      description: Optional custom actions in addition to built-in dimming.
+      default: []
+      selector:
+        action: {}
+
+mode: queued
+max: 20
+
+trigger:
+  - platform: event
+    event_type: hue_event
+  - platform: event
+    event_type: zha_event
+
+variables:
+  tap_dial_device: !input tap_dial_device
+  dim_enabled: !input enable_builtin_dimming
+  dim_target: !input dim_target
+  step_pct: !input dim_step_pct
+
+  # Common event fields used by hue_event / zha_event
+  event_device_id: "{{ trigger.event.data.device_id | default('') }}"
+  event_action: >
+    {% set data = trigger.event.data %}
+    {% if data.action is defined %}
+      {{ data.action }}
+    {% elif data.command is defined %}
+      {{ data.command }}
+    {% elif data.type is defined and data.subtype is defined %}
+      {{ data.type ~ '_' ~ data.subtype }}
+    {% elif data.event is defined %}
+      {{ data.event }}
+    {% elif data.type is defined %}
+      {{ data.type }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+  button_1_single_value: !input button_1_single_value
+  button_1_long_value: !input button_1_long_value
+  button_2_single_value: !input button_2_single_value
+  button_2_long_value: !input button_2_long_value
+  button_3_single_value: !input button_3_single_value
+  button_3_long_value: !input button_3_long_value
+  button_4_single_value: !input button_4_single_value
+  button_4_long_value: !input button_4_long_value
+  dial_clockwise_value: !input dial_clockwise_value
+  dial_counterclockwise_value: !input dial_counterclockwise_value
+
+condition:
+  - condition: template
+    value_template: "{{ event_device_id == tap_dial_device }}"
+  - condition: template
+    value_template: "{{ event_action not in ['unknown', 'unavailable', 'None', ''] }}"
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_1_single_value }}"
+        sequence: !input on_button_1_single
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_1_long_value }}"
+        sequence: !input on_button_1_long
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_2_single_value }}"
+        sequence: !input on_button_2_single
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_2_long_value }}"
+        sequence: !input on_button_2_long
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_3_single_value }}"
+        sequence: !input on_button_3_single
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_3_long_value }}"
+        sequence: !input on_button_3_long
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_4_single_value }}"
+        sequence: !input on_button_4_single
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == button_4_long_value }}"
+        sequence: !input on_button_4_long
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == dial_clockwise_value }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ dim_enabled and (dim_target | tojson != '{}') }}"
+            then:
+              - service: light.turn_on
+                target: !input dim_target
+                data:
+                  brightness_step_pct: "{{ step_pct | int }}"
+          - sequence: !input on_dial_clockwise
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_action == dial_counterclockwise_value }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ dim_enabled and (dim_target | tojson != '{}') }}"
+            then:
+              - service: light.turn_on
+                target: !input dim_target
+                data:
+                  brightness_step_pct: "{{ (step_pct | int) * -1 }}"
+          - sequence: !input on_dial_counterclockwise
